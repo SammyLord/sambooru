@@ -177,6 +177,37 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         }
 
         let autoTags = [];
+        try {
+            if (file.mimetype.startsWith('image/')) {
+                // Auto-tagging for images
+                const imageBase64 = (await fs.readFile(file.path)).toString('base64');
+                const response = await ollama.generate({ model: 'moondream', prompt: 'Describe this image for a booru. Be descriptive and concise. Only return keywords, separated by spaces. No sentences.', images: [imageBase64], stream: false });
+                autoTags = response.response.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
+            } else if (file.mimetype.startsWith('video/')) {
+                // Auto-tag a frame from the video
+                const framePath = path.join(__dirname, '..', '..', 'uploads', `${hash}_frame.png`);
+                await new Promise((resolve, reject) => {
+                    ffmpeg(file.path)
+                        .screenshots({ count: 1, filename: `${hash}_frame.png`, folder: 'uploads/' })
+                        .on('end', resolve)
+                        .on('error', reject);
+                });
+                const frameBase64 = (await fs.readFile(framePath)).toString('base64');
+                const response = await ollama.generate({ model: 'moondream', prompt: 'Describe this video for a booru based on this frame. Be descriptive and concise. Only return keywords, separated by spaces. No sentences.', images: [frameBase64], stream: false });
+                autoTags = response.response.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
+                await fs.unlink(framePath);
+            }
+        } catch (e) {
+            console.error("Ollama auto-tagging failed:", e.message);
+        }
+        
+        console.log("User tags:", tags);
+        console.log("Auto tags:", autoTags);
+
+        const userTags = tags.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
+        const combinedTags = [...new Set([...userTags, ...autoTags])];
+        console.log("Combined tags:", combinedTags);
+
         let newPost = {
             hash,
             uploader_id: req.session.userId,
@@ -186,39 +217,28 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         
         const thumbPath = path.join(__dirname, '..', 'public', 'thumbnails', hash + '.jpg');
 
-        if (file.mimetype.startsWith('image/')) {
+        // Process media files
+        if (file.mimetype === 'image/gif') {
+            newPost.type = 'image';
+            newPost.file_ext = '.gif';
+            const imagePath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
+            // For GIFs, move the original file directly to preserve animation
+            await fs.rename(file.path, imagePath);
+            // Create a static thumbnail from the first frame
+            await sharp(imagePath).resize(150, 150, { fit: 'inside' }).toFile(thumbPath);
+        } else if (file.mimetype.startsWith('image/')) {
             newPost.type = 'image';
             newPost.file_ext = '.png';
             const imagePath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
-            
-            // Compress to PNG and save
+            // For other images, convert to a compressed PNG
             await sharp(file.path).png({ quality: 80, compressionLevel: 7 }).toFile(imagePath);
             await sharp(imagePath).resize(150, 150, { fit: 'inside' }).toFile(thumbPath);
-
-            // Auto-tagging
-            const imageBase64 = (await fs.readFile(imagePath)).toString('base64');
-            const response = await ollama.generate({ model: 'moondream', prompt: 'Describe this image for a booru. Be descriptive and concise. Only return keywords, separated by spaces. No sentences.', images: [imageBase64], stream: false });
-            autoTags = response.response.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
-
+            await fs.unlink(file.path); // Clean up original upload
         } else if (file.mimetype.startsWith('video/')) {
             newPost.type = 'video';
-            newPost.file_ext = '.mpg'; // Target format for high compatibility
+            newPost.file_ext = '.mpg';
             const videoPath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
-
-            // Auto-tag a frame from the video
-            const framePath = path.join(__dirname, '..', '..', 'uploads', `${hash}_frame.png`);
-            await new Promise((resolve, reject) => {
-                ffmpeg(file.path)
-                    .screenshots({ count: 1, filename: `${hash}_frame.png`, folder: 'uploads/' })
-                    .on('end', resolve)
-                    .on('error', reject);
-            });
-            const frameBase64 = (await fs.readFile(framePath)).toString('base64');
-            const response = await ollama.generate({ model: 'moondream', prompt: 'Describe this video for a booru based on this frame. Be descriptive and concise. Only return keywords, separated by spaces. No sentences.', images: [frameBase64], stream: false });
-            autoTags = response.response.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
-            await fs.unlink(framePath);
-
-            // Generate thumbnail
+            
             await new Promise((resolve, reject) => {
                 ffmpeg(file.path)
                     .screenshots({ count: 1, timemarks: ['50%'], filename: `${hash}.jpg`, folder: 'src/public/thumbnails/' })
@@ -226,25 +246,22 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                     .on('error', reject);
             });
 
-            // Transcode video
             await new Promise((resolve, reject) => {
                 ffmpeg(file.path)
-                    .toFormat('mpeg') // MPEG-1
-                    .videoCodec('mpeg1video')
-                    .audioCodec('mp2')
-                    .outputOptions('-q:v', '8') // Mid-range quality
-                    .on('end', resolve)
-                    .on('error', reject)
+                    .toFormat('mpeg').videoCodec('mpeg1video').audioCodec('mp2')
+                    .outputOptions('-q:v', '8')
+                    .on('end', resolve).on('error', reject)
                     .save(videoPath);
             });
+            await fs.unlink(file.path); // Clean up original upload
         }
         
-        await fs.unlink(file.path); // Clean up original upload
+        await fs.unlink(file.path);
 
         const postId = await db.add('post_counter', 1);
-        const combinedTags = [...new Set([...tags.split(' '), ...autoTags])];
-        const tagNames = combinedTags.map(t => t.trim().toLowerCase()).filter(Boolean);
-        for (const tagName of tagNames) {
+        
+        newPost.tags = [];
+        for (const tagName of combinedTags) {
             const tagId = await getOrCreateTag(tagName, category || 'general');
             newPost.tags.push(tagId);
         }
