@@ -34,7 +34,7 @@ router.get('/search', async (req, res) => {
         const includedTags = [];
         const excludedTags = [];
 
-        query.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean).forEach(tag => {
+        query.trim().split(/\s+/).filter(Boolean).forEach(tag => {
             if (tag.startsWith('-')) {
                 excludedTags.push(tag.substring(1));
             } else {
@@ -204,7 +204,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         console.log("User tags:", tags);
         console.log("Auto tags:", autoTags);
 
-        const userTags = tags.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
+        const userTags = tags.trim().split(/\s+/).filter(Boolean);
         const combinedTags = [...new Set([...userTags, ...autoTags])];
         console.log("Combined tags:", combinedTags);
 
@@ -425,7 +425,7 @@ router.post('/:id/edit', async (req, res) => {
         }
 
         const { tags, category } = req.body;
-        const tagNames = tags.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
+        const tagNames = tags.trim().split(/\s+/).filter(Boolean);
         
         const newTagIds = [];
         for (const tagName of tagNames) {

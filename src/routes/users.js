@@ -137,7 +137,7 @@ router.post('/settings', async (req, res) => {
     try {
         const user = await users.get(req.session.userId);
         if (user) {
-            const blacklist = req.body.blacklist.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
+            const blacklist = req.body.blacklist.trim().split(/\s+/).filter(Boolean);
             user.blacklist = blacklist;
             await users.set(req.session.userId, user);
         }

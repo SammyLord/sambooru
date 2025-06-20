@@ -22,11 +22,11 @@
             <p><strong>Uploaded by:</strong> <a href="/users/<%= uploader.username %>"><%= uploader.username %></a></p>
             <p><strong>Uploaded on:</strong> <%= new Date(post.created_at).toLocaleString() %></p>
             <h3>Tags</h3>
-            <ul class="tags-list">
+            <div class="tags-list">
                 <% tagDetails.forEach(tag => { %>
-                    <li class="tag-<%= tag.category %>"><%= tag.name %></li>
+                    <a href="/posts/search?tags=<%= encodeURIComponent(tag.name) %>" class="tag-link tag-<%= tag.category %>"><%= tag.name %></a>
                 <% }) %>
-            </ul>
+            </div>
 
             <% if (user) { %>
                 <div class="post-actions">
