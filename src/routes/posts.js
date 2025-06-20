@@ -30,7 +30,7 @@ router.get('/search', async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = 50;
 
-        const allDbPosts = (await posts.all()).map(p => ({ id: p.id, ...p.value }));
+        const allDbPosts = await posts.all();
         const allDbTags = await tagsDb.all();
 
         if (!query.trim()) {
@@ -47,18 +47,20 @@ router.get('/search', async (req, res) => {
             }
 
             const filteredPosts = allDbPosts.filter(p => {
-                const postTagIds = p.tags || [];
+                const postTagIds = p.value.tags || [];
                 return !postTagIds.some(tid => blacklistedTagIds.includes(tid));
-            }).sort((a, b) => b.id - a.id);
+            }).sort((a, b) => parseInt(b.id, 10) - parseInt(a.id, 10));
 
             const paginatedPosts = filteredPosts.slice((page - 1) * limit, page * limit);
             const totalPages = Math.ceil(filteredPosts.length / limit);
 
             for (const post of paginatedPosts) {
-                post.tags = post.tags.map(tagId => {
-                    const tag = allDbTags.find(t => t.id === tagId);
-                    return tag ? tag.value : null;
-                }).filter(Boolean);
+                if (post.value.tags) {
+                    post.value.tags = post.value.tags.map(tagId => {
+                        const tag = allDbTags.find(t => t.id === tagId);
+                        return tag ? tag.value : null;
+                    }).filter(Boolean);
+                }
             }
 
             return res.render('search_results', { 
@@ -105,7 +107,7 @@ router.get('/search', async (req, res) => {
         }
         
         const matchedPosts = allDbPosts.filter(p => {
-            const postTagIds = p.tags || [];
+            const postTagIds = p.value.tags || [];
 
             // Check against blacklist
             if (postTagIds.some(tid => blacklistedTagIds.includes(tid))) {
@@ -116,16 +118,18 @@ router.get('/search', async (req, res) => {
             const hasNoExcluded = !postTagIds.some(id => excludedTagIds.includes(id));
 
             return hasAllIncluded && hasNoExcluded;
-        }).sort((a, b) => b.id - a.id);
+        }).sort((a, b) => parseInt(b.id, 10) - parseInt(a.id, 10));
 
         const totalPages = Math.ceil(matchedPosts.length / limit);
         const paginatedPosts = matchedPosts.slice((page - 1) * limit, page * limit);
 
         for (const post of paginatedPosts) {
-            post.tags = post.tags.map(tagId => {
-                const tag = allDbTags.find(t => t.id === tagId);
-                return tag ? tag.value : null;
-            }).filter(Boolean);
+            if (post.value.tags) {
+                post.value.tags = post.value.tags.map(tagId => {
+                    const tag = allDbTags.find(t => t.id === tagId);
+                    return tag ? tag.value : null;
+                }).filter(Boolean);
+            }
         }
 
         res.render('search_results', { 
@@ -221,11 +225,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         try {
             console.log("Attempting auto-tagging...");
             const prompt = 'List keywords for this image, separated by spaces. Example: "1girl cat_ears blue_hair smile"';
+            let rawAutoTags = '';
             
             if (file.mimetype.startsWith('image/')) {
                 const imageBase64 = (await fs.readFile(file.path)).toString('base64');
                 const response = await ollama.generate({ model: 'moondream', prompt: prompt, images: [imageBase64], stream: false });
-                autoTags = response.response.trim().split(/\s+/).filter(Boolean);
+                rawAutoTags = response.response;
             } else if (file.mimetype.startsWith('video/')) {
                 const framePath = path.join(__dirname, '..', '..', 'uploads', `${hash}_frame.png`);
                 await new Promise((resolve, reject) => {
@@ -235,8 +240,19 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                 });
                 const frameBase64 = (await fs.readFile(framePath)).toString('base64');
                 const response = await ollama.generate({ model: 'moondream', prompt: prompt, images: [frameBase64], stream: false });
-                autoTags = response.response.trim().split(/\s+/).filter(Boolean);
+                rawAutoTags = response.response;
                 await fs.unlink(framePath);
+            }
+
+            if (rawAutoTags) {
+                autoTags = rawAutoTags
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[,;()]/g, ' ')        // Replace common separators with spaces
+                    .replace(/-/g, '_')             // Replace hyphens with underscores
+                    .replace(/[^a-z0-9_ ]/g, '')    // Remove all other invalid characters
+                    .split(/\s+/)
+                    .filter(Boolean);
             }
         } catch (e) {
             console.error("Ollama auto-tagging failed:", e.message);
@@ -246,8 +262,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         console.log("Auto tags:", autoTags);
 
         const userTags = tags.trim().toLowerCase().split(/\s+/).filter(Boolean);
-        const cleanAutoTags = autoTags.map(tag => tag.toLowerCase());
-        const combinedTags = [...new Set([...userTags, ...cleanAutoTags])];
+        const combinedTags = [...new Set([...userTags, ...autoTags])];
         console.log("Combined tags:", combinedTags);
 
         let newPost = {
