@@ -179,9 +179,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         let autoTags = [];
         try {
             console.log("Attempting auto-tagging...");
+            const prompt = 'List keywords for this image, separated by spaces. Example: "1girl cat_ears blue_hair smile"';
+            
             if (file.mimetype.startsWith('image/')) {
                 const imageBase64 = (await fs.readFile(file.path)).toString('base64');
-                const response = await ollama.generate({ model: 'moondream', prompt: 'Describe this image for a booru. Be descriptive and concise. Only return keywords, separated by spaces. No sentences.', images: [imageBase64], stream: false });
+                const response = await ollama.generate({ model: 'moondream', prompt: prompt, images: [imageBase64], stream: false });
                 autoTags = response.response.trim().split(/\s+/).filter(Boolean);
             } else if (file.mimetype.startsWith('video/')) {
                 const framePath = path.join(__dirname, '..', '..', 'uploads', `${hash}_frame.png`);
@@ -191,7 +193,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                         .on('end', resolve).on('error', reject);
                 });
                 const frameBase64 = (await fs.readFile(framePath)).toString('base64');
-                const response = await ollama.generate({ model: 'moondream', prompt: 'Describe this video for a booru based on this frame. Be descriptive and concise. Only return keywords, separated by spaces. No sentences.', images: [frameBase64], stream: false });
+                const response = await ollama.generate({ model: 'moondream', prompt: prompt, images: [frameBase64], stream: false });
                 autoTags = response.response.trim().split(/\s+/).filter(Boolean);
                 await fs.unlink(framePath);
             }
