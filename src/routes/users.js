@@ -135,10 +135,10 @@ router.post('/settings', async (req, res) => {
         return res.status(401).send('Not logged in.');
     }
     try {
+        const { blacklist } = req.body;
         const user = await users.get(req.session.userId);
         if (user) {
-            const blacklist = req.body.blacklist.trim().split(/\s+/).filter(Boolean);
-            user.blacklist = blacklist;
+            user.blacklist = blacklist.trim().toLowerCase().split(/\s+/).filter(Boolean);
             await users.set(req.session.userId, user);
         }
         res.redirect('/users/settings');

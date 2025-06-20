@@ -26,78 +26,118 @@ const upload = multer({
 
 router.get('/search', async (req, res) => {
     try {
-        const query = req.query.tags;
-        if (!query) {
-            return res.render('search_results', { posts: [], query: '' });
-        }
+        const query = req.query.tags || '';
+        const page = parseInt(req.query.page) || 1;
+        const limit = 50;
 
-        const includedTags = [];
-        const excludedTags = [];
+        const allDbPosts = (await posts.all()).map(p => ({ id: p.id, ...p.value }));
+        const allDbTags = await tagsDb.all();
 
-        query.trim().split(/\s+/).filter(Boolean).forEach(tag => {
-            if (tag.startsWith('-')) {
-                excludedTags.push(tag.substring(1));
-            } else {
-                includedTags.push(tag);
+        if (!query.trim()) {
+            // If no search query, show latest posts (respecting blacklist)
+            let blacklistedTagIds = [];
+            if (req.session.userId) {
+                const currentUser = await users.get(req.session.userId);
+                if (currentUser && currentUser.blacklist) {
+                    const blacklistNames = currentUser.blacklist;
+                    blacklistedTagIds = allDbTags
+                        .filter(t => blacklistNames.includes(t.value.name))
+                        .map(t => t.id);
+                }
             }
-        });
 
-        if (includedTags.length === 0 && excludedTags.length === 0) {
-            return res.render('search_results', { posts: [], query });
+            const filteredPosts = allDbPosts.filter(p => {
+                const postTagIds = p.tags || [];
+                return !postTagIds.some(tid => blacklistedTagIds.includes(tid));
+            }).sort((a, b) => b.id - a.id);
+
+            const paginatedPosts = filteredPosts.slice((page - 1) * limit, page * limit);
+            const totalPages = Math.ceil(filteredPosts.length / limit);
+
+            for (const post of paginatedPosts) {
+                post.tags = post.tags.map(tagId => {
+                    const tag = allDbTags.find(t => t.id === tagId);
+                    return tag ? tag.value : null;
+                }).filter(Boolean);
+            }
+
+            return res.render('search_results', { 
+                posts: paginatedPosts, 
+                query: '',
+                currentPage: page,
+                totalPages: totalPages
+            });
         }
-        
-        const allTags = await tagsDb.all();
 
-        // Handle user blacklist
+        const searchTags = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const includedTags = searchTags.filter(t => !t.startsWith('-'));
+        const excludedTags = searchTags.filter(t => t.startsWith('-')).map(t => t.substring(1));
+        
+        console.log("Searching for tags:", { includedTags, excludedTags });
+
+        const includedTagIds = allDbTags
+            .filter(t => includedTags.includes(t.value.name.toLowerCase()))
+            .map(t => t.id);
+
+        // If a non-negated tag is searched for but doesn't exist, no results can be found.
+        if (includedTags.length > 0 && includedTagIds.length !== includedTags.length) {
+             return res.render('search_results', {
+                posts: [],
+                query,
+                currentPage: 1,
+                totalPages: 1
+            });
+        }
+
+        const excludedTagIds = allDbTags
+            .filter(t => excludedTags.includes(t.value.name.toLowerCase()))
+            .map(t => t.id);
+
         let blacklistedTagIds = [];
         if (req.session.userId) {
             const currentUser = await users.get(req.session.userId);
             if (currentUser && currentUser.blacklist) {
                 const blacklistNames = currentUser.blacklist;
-                blacklistedTagIds = allTags
+                blacklistedTagIds = allDbTags
                     .filter(t => blacklistNames.includes(t.value.name))
                     .map(t => t.id);
             }
         }
+        
+        const matchedPosts = allDbPosts.filter(p => {
+            const postTagIds = p.tags || [];
 
-        const includedTagIds = [];
-        for(const tagName of includedTags) {
-            const tag = allTags.find(t => t.value.name === tagName);
-            if(tag) {
-                includedTagIds.push(tag.id);
-            } else {
-                // If an included tag doesn't exist, no posts can match
-                return res.render('search_results', { posts: [], query });
-            }
-        }
-
-        const excludedTagIds = [];
-        for(const tagName of excludedTags) {
-            const tag = allTags.find(t => t.value.name === tagName);
-            if(tag) {
-                excludedTagIds.push(tag.id);
-            }
-        }
-
-        const allPosts = await posts.all();
-        const matchedPosts = allPosts.filter(p => {
-            const postTagIds = p.value.tags;
             // Check against blacklist
-            if (blacklistedTagIds.length > 0) {
-                if (postTagIds.some(tid => blacklistedTagIds.includes(tid))) {
-                    return false; // Post contains a blacklisted tag
-                }
+            if (postTagIds.some(tid => blacklistedTagIds.includes(tid))) {
+                return false;
             }
-            const hasAllIncluded = includedTagIds.every(id => postTagIds.includes(id));
-            const hasNoExcluded = excludedTagIds.every(id => !postTagIds.includes(id));
-            return hasAllIncluded && hasNoExcluded;
-        });
 
-        res.render('search_results', { posts: matchedPosts, query });
+            const hasAllIncluded = includedTags.length === 0 || includedTagIds.every(id => postTagIds.includes(id));
+            const hasNoExcluded = !postTagIds.some(id => excludedTagIds.includes(id));
+
+            return hasAllIncluded && hasNoExcluded;
+        }).sort((a, b) => b.id - a.id);
+
+        const totalPages = Math.ceil(matchedPosts.length / limit);
+        const paginatedPosts = matchedPosts.slice((page - 1) * limit, page * limit);
+
+        for (const post of paginatedPosts) {
+            post.tags = post.tags.map(tagId => {
+                const tag = allDbTags.find(t => t.id === tagId);
+                return tag ? tag.value : null;
+            }).filter(Boolean);
+        }
+
+        res.render('search_results', { 
+            posts: paginatedPosts, 
+            query,
+            currentPage: page,
+            totalPages
+        });
 
     } catch (error) {
         console.error(error);
-        res.status(500).send('Server error during search.');
+        res.status(500).send('Server Error');
     }
 });
 
@@ -141,15 +181,16 @@ router.get('/', async (req, res) => {
 });
 
 async function getOrCreateTag(name, category) {
+    const lowerCaseName = name.toLowerCase();
     const allTags = await tagsDb.all();
-    let tag = allTags.find(t => t.value.name === name);
+    let tag = allTags.find(t => t.value.name.toLowerCase() === lowerCaseName);
 
     if (tag) {
         return tag.id;
     }
 
     const tagId = await db.add('tag_counter', 1);
-    await tagsDb.set(tagId.toString(), { name, category });
+    await tagsDb.set(tagId.toString(), { name: lowerCaseName, category });
     return tagId;
 }
 
@@ -204,8 +245,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         console.log("User tags:", tags);
         console.log("Auto tags:", autoTags);
 
-        const userTags = tags.trim().split(/\s+/).filter(Boolean);
-        const combinedTags = [...new Set([...userTags, ...autoTags])];
+        const userTags = tags.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const cleanAutoTags = autoTags.map(tag => tag.toLowerCase());
+        const combinedTags = [...new Set([...userTags, ...cleanAutoTags])];
         console.log("Combined tags:", combinedTags);
 
         let newPost = {
@@ -231,24 +273,63 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             await sharp(file.path).png({ quality: 80, compressionLevel: 7 }).toFile(imagePath);
             await sharp(imagePath).resize(150, 150, { fit: 'inside' }).toFile(thumbPath);
         } else if (file.mimetype.startsWith('video/')) {
-            newPost.type = 'video';
-            newPost.file_ext = '.mpg';
-            const videoPath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
-            
-            await new Promise((resolve, reject) => {
-                ffmpeg(file.path)
-                    .screenshots({ count: 1, timemarks: ['50%'], filename: `${hash}.jpg`, folder: 'src/public/thumbnails/' })
-                    .on('end', resolve)
-                    .on('error', reject);
-            });
+            const tempPath = req.file.path;
+            const outputFilename = `${hash}.mov`;
+            const processedPath = path.join(uploadsDir, outputFilename);
+            const thumbPath = path.join(thumbnailsDir, `${hash}.png`);
 
-            await new Promise((resolve, reject) => {
-                ffmpeg(file.path)
-                    .toFormat('mpeg').videoCodec('mpeg1video').audioCodec('mp2')
-                    .outputOptions('-q:v', '8')
-                    .on('end', resolve).on('error', reject)
-                    .save(videoPath);
-            });
+            console.log(`Transcoding video ${tempPath} to ${processedPath}`);
+
+            try {
+                // Transcode the video to Cinepak .mov
+                await new Promise((resolve, reject) => {
+                    ffmpeg(tempPath)
+                        .outputOptions(['-c:v', 'cinepak', '-c:a', 'adpcm_ima_qt', '-q:v', '5'])
+                        .toFormat('mov')
+                        .on('end', resolve)
+                        .on('error', (err) => {
+                            console.error('Error during transcoding:', err.message);
+                            reject(err);
+                        })
+                        .save(processedPath);
+                });
+                console.log('Video transcoding finished.');
+
+                // Create a thumbnail from the transcoded video
+                await new Promise((resolve, reject) => {
+                    ffmpeg(processedPath)
+                        .screenshots({
+                            count: 1,
+                            timemarks: ['1'], // seek to 1 second
+                            filename: `${hash}.png`,
+                            folder: thumbnailsDir,
+                            size: '150x150'
+                        })
+                        .on('end', resolve)
+                        .on('error', (err) => {
+                            console.error('Error creating video thumbnail:', err.message);
+                            reject(err);
+                        });
+                });
+                 console.log('Video thumbnail created.');
+
+                fileToSave = outputFilename;
+                postType = 'video';
+                
+                const dimensions = await getVideoDimensions(processedPath);
+                width = dimensions.width;
+                height = dimensions.height;
+                
+                const thumbDimensions = await getImageDimensions(thumbPath);
+                thumbWidth = thumbDimensions.width;
+                thumbHeight = thumbDimensions.height;
+
+            } catch (error) {
+                console.error("Video processing failed:", error);
+                // Attempt to clean up the failed processed file
+                await fs.unlink(processedPath).catch(e => console.error("Failed to delete processed file on error:", e));
+                return res.status(500).send('Server error during video processing.');
+            }
         }
         
         const postId = await db.add('post_counter', 1);
@@ -261,10 +342,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
         await posts.set(postId.toString(), newPost);
         
-        // On success, clean up the original file if it wasn't moved (i.e., not a GIF)
-        if (file.mimetype !== 'image/gif') {
-            await fs.unlink(file.path);
-        }
+        // On success, clean up the original temporary file
+        await fs.unlink(req.file.path).catch(e => console.error("Failed to delete original upload:", e));
 
         res.redirect(`/posts/${postId}`);
 
@@ -425,7 +504,7 @@ router.post('/:id/edit', async (req, res) => {
         }
 
         const { tags, category } = req.body;
-        const tagNames = tags.trim().split(/\s+/).filter(Boolean);
+        const tagNames = tags.trim().toLowerCase().split(/\s+/).filter(Boolean);
         
         const newTagIds = [];
         for (const tagName of tagNames) {
