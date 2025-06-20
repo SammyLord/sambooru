@@ -101,10 +101,11 @@ form div {
     list-style: none;
     padding: 0;
     margin: 0;
+    overflow: hidden; /* Add this to contain the floated elements */
 }
 
 .tags-list li {
-    display: inline;
+    float: left; /* Changed from display: inline */
     padding: 5px 10px;
     margin: 2px;
     color: white;

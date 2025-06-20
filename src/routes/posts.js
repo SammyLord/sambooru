@@ -222,18 +222,14 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             newPost.type = 'image';
             newPost.file_ext = '.gif';
             const imagePath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
-            // For GIFs, move the original file directly to preserve animation
-            await fs.rename(file.path, imagePath);
-            // Create a static thumbnail from the first frame
+            await fs.rename(file.path, imagePath); // Move the file
             await sharp(imagePath).resize(150, 150, { fit: 'inside' }).toFile(thumbPath);
         } else if (file.mimetype.startsWith('image/')) {
             newPost.type = 'image';
             newPost.file_ext = '.png';
             const imagePath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
-            // For other images, convert to a compressed PNG
             await sharp(file.path).png({ quality: 80, compressionLevel: 7 }).toFile(imagePath);
             await sharp(imagePath).resize(150, 150, { fit: 'inside' }).toFile(thumbPath);
-            await fs.unlink(file.path); // Clean up original upload
         } else if (file.mimetype.startsWith('video/')) {
             newPost.type = 'video';
             newPost.file_ext = '.mpg';
@@ -253,11 +249,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                     .on('end', resolve).on('error', reject)
                     .save(videoPath);
             });
-            await fs.unlink(file.path); // Clean up original upload
         }
         
-        await fs.unlink(file.path);
-
         const postId = await db.add('post_counter', 1);
         
         newPost.tags = [];
@@ -267,12 +260,26 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         }
 
         await posts.set(postId.toString(), newPost);
+        
+        // On success, clean up the original file if it wasn't moved (i.e., not a GIF)
+        if (file.mimetype !== 'image/gif') {
+            await fs.unlink(file.path);
+        }
+
         res.redirect(`/posts/${postId}`);
 
     } catch (error) {
         console.error("Upload failed:", error);
         if (req.file) {
-            await fs.unlink(req.file.path).catch(err => console.error("Failed to cleanup file", err));
+            // Only try to unlink the file if it still exists at the temp path
+            try {
+                await fs.access(req.file.path);
+                await fs.unlink(req.file.path);
+            } catch (cleanupError) {
+                // This error can be ignored if the file is already gone,
+                // but we'll log it just in case something else went wrong.
+                console.error("Failed to cleanup file during error handling:", cleanupError.message);
+            }
         }
         res.status(500).send('Server error during upload: ' + error.message);
     }
@@ -289,11 +296,12 @@ router.get('/:id', async (req, res) => {
 
         // Fetch tag names
         const tagDetails = [];
-        const allTags = await tagsDb.all();
-        for (const tagId of post.tags) {
-            const tag = allTags.find(t => t.id === tagId);
-            if (tag) {
-                tagDetails.push(tag.value);
+        if (post.tags && post.tags.length > 0) {
+            for (const tagId of post.tags) {
+                const tag = await tagsDb.get(tagId.toString());
+                if (tag) {
+                    tagDetails.push(tag);
+                }
             }
         }
         
