@@ -178,23 +178,21 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
         let autoTags = [];
         try {
+            console.log("Attempting auto-tagging...");
             if (file.mimetype.startsWith('image/')) {
-                // Auto-tagging for images
                 const imageBase64 = (await fs.readFile(file.path)).toString('base64');
                 const response = await ollama.generate({ model: 'moondream', prompt: 'Describe this image for a booru. Be descriptive and concise. Only return keywords, separated by spaces. No sentences.', images: [imageBase64], stream: false });
-                autoTags = response.response.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
+                autoTags = response.response.trim().split(/\s+/).filter(Boolean);
             } else if (file.mimetype.startsWith('video/')) {
-                // Auto-tag a frame from the video
                 const framePath = path.join(__dirname, '..', '..', 'uploads', `${hash}_frame.png`);
                 await new Promise((resolve, reject) => {
                     ffmpeg(file.path)
                         .screenshots({ count: 1, filename: `${hash}_frame.png`, folder: 'uploads/' })
-                        .on('end', resolve)
-                        .on('error', reject);
+                        .on('end', resolve).on('error', reject);
                 });
                 const frameBase64 = (await fs.readFile(framePath)).toString('base64');
                 const response = await ollama.generate({ model: 'moondream', prompt: 'Describe this video for a booru based on this frame. Be descriptive and concise. Only return keywords, separated by spaces. No sentences.', images: [frameBase64], stream: false });
-                autoTags = response.response.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
+                autoTags = response.response.trim().split(/\s+/).filter(Boolean);
                 await fs.unlink(framePath);
             }
         } catch (e) {
