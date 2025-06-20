@@ -54,8 +54,6 @@ app.use('/posts', commentRoutes);
 app.use('/posts', favoriteRoutes);
 app.use('/admin', adminRoutes);
 
-app.get('/search', postRoutes);
-
 app.get('/', (req, res) => {
     res.render('index');
 });

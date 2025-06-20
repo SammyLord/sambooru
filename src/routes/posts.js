@@ -24,6 +24,122 @@ const upload = multer({
     }
 });
 
+router.get('/search', async (req, res) => {
+    try {
+        const query = req.query.tags;
+        if (!query) {
+            return res.render('search_results', { posts: [], query: '' });
+        }
+
+        const includedTags = [];
+        const excludedTags = [];
+
+        query.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean).forEach(tag => {
+            if (tag.startsWith('-')) {
+                excludedTags.push(tag.substring(1));
+            } else {
+                includedTags.push(tag);
+            }
+        });
+
+        if (includedTags.length === 0 && excludedTags.length === 0) {
+            return res.render('search_results', { posts: [], query });
+        }
+        
+        const allTags = await tagsDb.all();
+
+        // Handle user blacklist
+        let blacklistedTagIds = [];
+        if (req.session.userId) {
+            const currentUser = await users.get(req.session.userId);
+            if (currentUser && currentUser.blacklist) {
+                const blacklistNames = currentUser.blacklist;
+                blacklistedTagIds = allTags
+                    .filter(t => blacklistNames.includes(t.value.name))
+                    .map(t => t.id);
+            }
+        }
+
+        const includedTagIds = [];
+        for(const tagName of includedTags) {
+            const tag = allTags.find(t => t.value.name === tagName);
+            if(tag) {
+                includedTagIds.push(tag.id);
+            } else {
+                // If an included tag doesn't exist, no posts can match
+                return res.render('search_results', { posts: [], query });
+            }
+        }
+
+        const excludedTagIds = [];
+        for(const tagName of excludedTags) {
+            const tag = allTags.find(t => t.value.name === tagName);
+            if(tag) {
+                excludedTagIds.push(tag.id);
+            }
+        }
+
+        const allPosts = await posts.all();
+        const matchedPosts = allPosts.filter(p => {
+            const postTagIds = p.value.tags;
+            // Check against blacklist
+            if (blacklistedTagIds.length > 0) {
+                if (postTagIds.some(tid => blacklistedTagIds.includes(tid))) {
+                    return false; // Post contains a blacklisted tag
+                }
+            }
+            const hasAllIncluded = includedTagIds.every(id => postTagIds.includes(id));
+            const hasNoExcluded = excludedTagIds.every(id => !postTagIds.includes(id));
+            return hasAllIncluded && hasNoExcluded;
+        });
+
+        res.render('search_results', { posts: matchedPosts, query });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Server error during search.');
+    }
+});
+
+router.get('/', async (req, res) => {
+    try {
+        const page = parseInt(req.query.page, 10) || 1;
+        const limit = 20; // Posts per page
+        const startIndex = (page - 1) * limit;
+
+        let allPosts = (await posts.all()).sort((a, b) => b.id - a.id);
+
+        // Handle user blacklist
+        if (req.session.userId) {
+            const currentUser = await users.get(req.session.userId);
+            if (currentUser && currentUser.blacklist) {
+                const allTags = await tagsDb.all();
+                const blacklistedTagIds = allTags
+                    .filter(t => currentUser.blacklist.includes(t.value.name))
+                    .map(t => t.id);
+                
+                if (blacklistedTagIds.length > 0) {
+                    allPosts = allPosts.filter(p => 
+                        !p.value.tags.some(tid => blacklistedTagIds.includes(tid))
+                    );
+                }
+            }
+        }
+        
+        const paginatedPosts = allPosts.slice(startIndex, startIndex + limit);
+        const pageCount = Math.ceil(allPosts.length / limit);
+
+        res.render('all_posts', {
+            posts: paginatedPosts,
+            page: page,
+            pageCount: pageCount
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Server error getting all posts.');
+    }
+});
+
 async function getOrCreateTag(name, category) {
     const allTags = await tagsDb.all();
     let tag = allTags.find(t => t.value.name === name);
@@ -195,83 +311,6 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-router.get('/search', async (req, res) => {
-    try {
-        const query = req.query.tags;
-        if (!query) {
-            return res.render('search_results', { posts: [], query: '' });
-        }
-
-        const includedTags = [];
-        const excludedTags = [];
-
-        query.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean).forEach(tag => {
-            if (tag.startsWith('-')) {
-                excludedTags.push(tag.substring(1));
-            } else {
-                includedTags.push(tag);
-            }
-        });
-
-        if (includedTags.length === 0 && excludedTags.length === 0) {
-            return res.render('search_results', { posts: [], query });
-        }
-        
-        const allTags = await tagsDb.all();
-
-        // Handle user blacklist
-        let blacklistedTagIds = [];
-        if (req.session.userId) {
-            const currentUser = await users.get(req.session.userId);
-            if (currentUser && currentUser.blacklist) {
-                const blacklistNames = currentUser.blacklist;
-                blacklistedTagIds = allTags
-                    .filter(t => blacklistNames.includes(t.value.name))
-                    .map(t => t.id);
-            }
-        }
-
-        const includedTagIds = [];
-        for(const tagName of includedTags) {
-            const tag = allTags.find(t => t.value.name === tagName);
-            if(tag) {
-                includedTagIds.push(tag.id);
-            } else {
-                // If an included tag doesn't exist, no posts can match
-                return res.render('search_results', { posts: [], query });
-            }
-        }
-
-        const excludedTagIds = [];
-        for(const tagName of excludedTags) {
-            const tag = allTags.find(t => t.value.name === tagName);
-            if(tag) {
-                excludedTagIds.push(tag.id);
-            }
-        }
-
-        const allPosts = await posts.all();
-        const matchedPosts = allPosts.filter(p => {
-            const postTagIds = p.value.tags;
-            // Check against blacklist
-            if (blacklistedTagIds.length > 0) {
-                if (postTagIds.some(tid => blacklistedTagIds.includes(tid))) {
-                    return false; // Post contains a blacklisted tag
-                }
-            }
-            const hasAllIncluded = includedTagIds.every(id => postTagIds.includes(id));
-            const hasNoExcluded = excludedTagIds.every(id => !postTagIds.includes(id));
-            return hasAllIncluded && hasNoExcluded;
-        });
-
-        res.render('search_results', { posts: matchedPosts, query });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Server error during search.');
-    }
-});
-
 router.delete('/:id', async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).send('You must be logged in.');
@@ -295,8 +334,8 @@ router.delete('/:id', async (req, res) => {
         // Delete files
         const imagePath = path.join(__dirname, '..', 'public', 'images', post.hash + post.file_ext);
         const thumbPath = path.join(__dirname, '..', 'public', 'thumbnails', post.hash + '.jpg');
-        await fs.unlink(imagePath);
-        await fs.unlink(thumbPath);
+        await fs.unlink(imagePath).catch(err => console.error(err));
+        await fs.unlink(thumbPath).catch(err => console.error(err));
 
         // Delete post from DB
         await posts.delete(postId);

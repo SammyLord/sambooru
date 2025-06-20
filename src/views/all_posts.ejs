@@ -1,0 +1,37 @@
+<%- include('partials/header', {title: 'All Posts'}) %>
+
+<h1>All Posts</h1>
+
+<div class="search-results-grid">
+    <% if (posts && posts.length > 0) { %>
+        <% posts.forEach(p => { %>
+            <div class="thumbnail">
+                <a href="/posts/<%= p.id %>">
+                    <img src="/thumbnails/<%= p.value.hash %>.jpg" alt="Post thumbnail">
+                </a>
+            </div>
+        <% }) %>
+    <% } else { %>
+        <p>There are no posts here.</p>
+    <% } %>
+</div>
+
+<div class="pagination">
+    <% if (page > 1) { %>
+        <a href="/posts?page=<%= page - 1 %>">Previous</a>
+    <% } %>
+
+    <% for(let i = 1; i <= pageCount; i++) { %>
+        <% if (i === page) { %>
+            <span><%= i %></span>
+        <% } else { %>
+            <a href="/posts?page=<%= i %>"><%= i %></a>
+        <% } %>
+    <% } %>
+
+    <% if (page < pageCount) { %>
+        <a href="/posts?page=<%= page + 1 %>">Next</a>
+    <% } %>
+</div>
+
+<%- include('partials/footer') %> 
