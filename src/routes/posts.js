@@ -191,7 +191,7 @@ async function getOrCreateTag(name, category) {
 
     const tagId = await db.add('tag_counter', 1);
     await tagsDb.set(tagId.toString(), { name: lowerCaseName, category });
-    return tagId;
+    return tagId.toString();
 }
 
 router.post('/upload', upload.single('file'), async (req, res) => {
