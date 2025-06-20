@@ -3,6 +3,26 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const { db, users, posts, tags } = require('../db/database');
 
+// GET registration page
+router.get('/register', (req, res) => {
+    res.render('register');
+});
+
+// GET login page
+router.get('/login', (req, res) => {
+    res.render('login');
+});
+
+// GET user settings page
+router.get('/settings', async (req, res) => {
+    if (!req.session.userId) {
+        return res.redirect('/users/login');
+    }
+    const user = await users.get(req.session.userId);
+    const blacklist = user.blacklist || [];
+    res.render('settings', { blacklist: blacklist.join(' ') });
+});
+
 // GET user profile page
 router.get('/:username', async (req, res) => {
     try {
@@ -21,8 +41,8 @@ router.get('/:username', async (req, res) => {
         if (req.session.userId) {
             const currentUser = await users.get(req.session.userId);
             if (currentUser && currentUser.blacklist) {
-                const allTags = await tags.all();
-                const blacklistedTagIds = allTags
+                const allTagsDb = await tags.all();
+                const blacklistedTagIds = allTagsDb
                     .filter(t => currentUser.blacklist.includes(t.value.name))
                     .map(t => t.id);
                 
@@ -42,50 +62,15 @@ router.get('/:username', async (req, res) => {
     }
 });
 
-// GET user settings page
-router.get('/settings', async (req, res) => {
-    if (!req.session.userId) {
-        return res.redirect('/users/login');
-    }
-    // We need to fetch the user's current blacklist to display it.
-    const user = await users.get(req.session.userId);
-    const blacklist = user.blacklist || [];
-    res.render('settings', { blacklist: blacklist.join(' ') });
-});
-
-router.post('/settings', async (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).send('Not logged in.');
-    }
-    try {
-        const user = await users.get(req.session.userId);
-        if (user) {
-            const blacklist = req.body.blacklist.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
-            user.blacklist = blacklist;
-            await users.set(req.session.userId, user);
-        }
-        res.redirect('/users/settings');
-    } catch (e) {
-        res.status(500).send('Error updating settings.');
-    }
-});
-
-// GET registration page
-router.get('/register', (req, res) => {
-    res.render('register');
-});
-
 // POST register a new user
 router.post('/register', async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // Simple validation
         if (!username || !password) {
             return res.status(400).send('Username and password are required.');
         }
 
-        // Check if user exists
         const allUsers = await users.all();
         const userExists = allUsers.some(u => u.value.username === username);
 
@@ -99,7 +84,7 @@ router.post('/register', async (req, res) => {
         await users.set(userId.toString(), {
             username,
             password_hash: hashedPassword,
-            role: 'user' // default role
+            role: 'user'
         });
 
         res.redirect('/users/login');
@@ -108,11 +93,6 @@ router.post('/register', async (req, res) => {
         console.error(error);
         res.status(500).send('Server error during registration.');
     }
-});
-
-// GET login page
-router.get('/login', (req, res) => {
-    res.render('login');
 });
 
 // POST login a user
@@ -137,7 +117,6 @@ router.post('/login', async (req, res) => {
             return res.status(400).send('Invalid credentials.');
         }
 
-        // Set up session
         req.session.userId = userEntry.id;
         req.session.username = user.username;
         req.session.role = user.role;
@@ -147,6 +126,24 @@ router.post('/login', async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).send('Server error during login.');
+    }
+});
+
+// POST user settings
+router.post('/settings', async (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).send('Not logged in.');
+    }
+    try {
+        const user = await users.get(req.session.userId);
+        if (user) {
+            const blacklist = req.body.blacklist.split(' ').map(t => t.trim().toLowerCase()).filter(Boolean);
+            user.blacklist = blacklist;
+            await users.set(req.session.userId, user);
+        }
+        res.redirect('/users/settings');
+    } catch (e) {
+        res.status(500).send('Error updating settings.');
     }
 });
 
