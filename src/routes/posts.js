@@ -248,6 +248,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                 autoTags = rawAutoTags
                     .trim()
                     .toLowerCase()
+                    .replace(/["']/g, '')           // Remove quotation marks
                     .replace(/[,;()]/g, ' ')        // Replace common separators with spaces
                     .replace(/-/g, '_')             // Replace hyphens with underscores
                     .replace(/[^a-z0-9_ ]/g, '')    // Remove all other invalid characters
