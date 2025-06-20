@@ -1,0 +1,15 @@
+<%- include('partials/header', {title: 'User Settings'}) %>
+
+<h1>User Settings</h1>
+
+<h2>Tag Blacklist</h2>
+<p>Posts containing any of these tags (one tag per space) will be hidden from view.</p>
+
+<form action="/users/settings" method="post">
+    <div>
+        <textarea name="blacklist" rows="10" cols="50"><%= blacklist %></textarea>
+    </div>
+    <button type="submit">Save Blacklist</button>
+</form>
+
+<%- include('partials/footer') %> 

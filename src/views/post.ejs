@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post <%= postId %> - Sambooru</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <%- include('partials/header', {title: 'Post ' + postId}) %>
+
+    <div class="post-container">
+        <div class="image-container">
+            <% if (post.type === 'video') { %>
+                <embed src="/images/<%= post.hash %><%= post.file_ext %>" width="640" height="480" autostart="false">
+            <% } else { %>
+                <img src="/images/<%= post.hash %><%= post.file_ext %>" alt="Post <%= postId %>">
+            <% } %>
+        </div>
+        <div class="details-container">
+            <h2>Post Information</h2>
+            <p><strong>Uploaded by:</strong> <a href="/users/<%= uploader.username %>"><%= uploader.username %></a></p>
+            <p><strong>Uploaded on:</strong> <%= new Date(post.created_at).toLocaleString() %></p>
+            <h3>Tags</h3>
+            <ul class="tags-list">
+                <% tagDetails.forEach(tag => { %>
+                    <li class="tag-<%= tag.category %>"><%= tag.name %></li>
+                <% }) %>
+            </ul>
+
+            <% if (user) { %>
+                <div class="post-actions">
+                    <% if (isFavorited) { %>
+                        <form action="/posts/<%= postId %>/favorite?_method=DELETE" method="post" style="display:inline;">
+                            <button type="submit">Unfavorite</button>
+                        </form>
+                    <% } else { %>
+                        <form action="/posts/<%= postId %>/favorite" method="post" style="display:inline;">
+                            <button type="submit">Favorite</button>
+                        </form>
+                    <% } %>
+                </div>
+            <% } %>
+
+            <% if (user && (user.username === uploader.username || user.role === 'moderator' || user.role === 'admin')) { %>
+                <div class="post-actions">
+                    <a href="/posts/<%= postId %>/edit">Edit Post</a>
+                    <a href="/posts/<%= postId %>/delete">Delete Post</a>
+                </div>
+            <% } %>
+
+            <div class="comments-section">
+                <h3>Comments</h3>
+                <form action="/posts/<%= postId %>/comments" method="post">
+                    <textarea name="content" required></textarea>
+                    <button type="submit">Submit Comment</button>
+                </form>
+                
+                <div class="comments-list">
+                    <% if (comments && comments.length > 0) { %>
+                        <% comments.forEach(comment => { %>
+                            <div class="comment">
+                                <p class="comment-author"><strong><a href="/users/<%= comment.username %>"><%= comment.username %></a></strong> says:</p>
+                                <p class="comment-content"><%= comment.content %></p>
+                                <p class="comment-date"><%= new Date(comment.created_at).toLocaleString() %></p>
+                            </div>
+                        <% }) %>
+                    <% } else { %>
+                        <p>No comments yet.</p>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <%- include('partials/footer') %>
+</body>
+</html> 

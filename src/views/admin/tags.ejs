@@ -1,0 +1,35 @@
+<%- include('../partials/header', {title: 'Manage Tags'}) %>
+
+<h1>Manage Tags</h1>
+
+<table border="1" width="100%">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% tags.forEach(tag => { %>
+            <tr>
+                <td><%= tag.id %></td>
+                <form action="/admin/tags/<%= tag.id %>/edit" method="post">
+                    <td><input type="text" name="name" value="<%= tag.value.name %>"></td>
+                    <td><input type="text" name="category" value="<%= tag.value.category %>"></td>
+                    <td>
+                        <button type="submit">Update</button>
+                    </td>
+                </form>
+                <td>
+                    <form action="/admin/tags/<%= tag.id %>/delete" method="post">
+                        <button type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<%- include('../partials/footer') %> 

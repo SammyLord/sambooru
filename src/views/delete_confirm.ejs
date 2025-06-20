@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Confirm Deletion - Sambooru</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <%- include('partials/header', {title: 'Confirm Deletion'}) %>
+
+    <h1>Confirm Deletion</h1>
+    <p>Are you sure you want to delete post #<%= postId %>?</p>
+    <form action="/posts/<%= postId %>?_method=DELETE" method="post">
+        <button type="submit">Yes, Delete This Post</button>
+    </form>
+    <a href="/posts/<%= postId %>">No, Go Back</a>
+
+    <%- include('partials/footer') %>
+</body>
+</html> 

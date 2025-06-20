@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results for "<%= query %>" - Sambooru</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <%- include('partials/nav') %>
+    <%- include('partials/header', {title: 'Search Results for "' + query + '"'}) %>
+
+    <h1>Search Results for "<%= query %>"</h1>
+
+    <div class="search-results-grid">
+        <% if (posts && posts.length > 0) { %>
+            <% posts.forEach(p => { %>
+                <div class="thumbnail">
+                    <a href="/posts/<%= p.id %>">
+                        <img src="/thumbnails/<%= p.value.hash %>.jpg" alt="Post thumbnail">
+                    </a>
+                </div>
+            <% }) %>
+        <% } else { %>
+            <p>No posts found matching your search.</p>
+        <% } %>
+    </div>
+
+    <%- include('partials/footer') %>
+</body>
+</html> 

@@ -1,0 +1,21 @@
+<%- include('partials/header', {title: profileUser.username + "'s Profile"}) %>
+
+<h1><%= profileUser.username %>'s Profile</h1>
+<p>User Role: <%= profileUser.role %></p>
+
+<h2>Uploaded Posts</h2>
+<div class="search-results-grid">
+    <% if (posts && posts.length > 0) { %>
+        <% posts.forEach(p => { %>
+            <div class="thumbnail">
+                <a href="/posts/<%= p.id %>">
+                    <img src="/thumbnails/<%= p.value.hash %>.jpg" alt="Post thumbnail">
+                </a>
+            </div>
+        <% }) %>
+    <% } else { %>
+        <p>This user has not uploaded any posts yet.</p>
+    <% } %>
+</div>
+
+<%- include('partials/footer') %> 

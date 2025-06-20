@@ -1,0 +1,37 @@
+<%- include('../partials/header', {title: 'Manage Users'}) %>
+
+<h1>Manage Users</h1>
+
+<table border="1" width="100%">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% users.forEach(user => { %>
+            <tr>
+                <td><%= user.id %></td>
+                <td><a href="/users/<%= user.value.username %>"><%= user.value.username %></a></td>
+                <td>
+                    <form action="/admin/users/<%= user.id %>/role" method="post">
+                        <select name="role">
+                            <option value="user" <%= user.value.role === 'user' ? 'selected' : '' %>>User</option>
+                            <option value="moderator" <%= user.value.role === 'moderator' ? 'selected' : '' %>>Moderator</option>
+                            <option value="admin" <%= user.value.role === 'admin' ? 'selected' : '' %>>Admin</option>
+                        </select>
+                        <button type="submit">Update</button>
+                    </form>
+                </td>
+                <td>
+                    <!-- Future actions like delete user could go here -->
+                </td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<%- include('../partials/footer') %> 

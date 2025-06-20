@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edit Post - Sambooru</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <%- include('partials/header', {title: 'Edit Post'}) %>
+
+    <h1>Edit Post</h1>
+    <form action="/posts/<%= postId %>/edit" method="post">
+        <div>
+            <label for="tags">Tags (space-separated):</label>
+            <input type="text" id="tags" name="tags" value="<%= tagNames %>" required>
+        </div>
+        <div>
+            <label for="category">Category (for new tags):</label>
+            <input type="text" id="category" name="category" value="general">
+        </div>
+        <button type="submit">Save Changes</button>
+    </form>
+
+    <%- include('partials/footer') %>
+</body>
+</html> 

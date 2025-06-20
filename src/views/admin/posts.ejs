@@ -1,0 +1,53 @@
+<%- include('../partials/header', {title: 'Manage Posts'}) %>
+
+<h1>Manage Posts</h1>
+
+<table border="1" width="100%">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Thumbnail</th>
+            <th>Uploader</th>
+            <th>Created At</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% posts.forEach(post => { %>
+            <tr>
+                <td><%= post.id %></td>
+                <td>
+                    <a href="/posts/<%= post.id %>">
+                        <img src="/thumbnails/<%= post.value.hash %>.jpg" alt="Thumb" width="100">
+                    </a>
+                </td>
+                <td><a href="/users/<%= post.uploaderName %>"><%= post.uploaderName %></a></td>
+                <td><%= new Date(post.value.created_at).toLocaleDateString() %></td>
+                <td>
+                    <a href="/posts/<%= post.id %>/edit">Edit</a>
+                    <a href="/posts/<%= post.id %>/delete">Delete</a>
+                </td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<div class="pagination">
+    <% if (page > 1) { %>
+        <a href="/admin/posts?page=<%= page - 1 %>">Previous</a>
+    <% } %>
+
+    <% for(let i = 1; i <= pageCount; i++) { %>
+        <% if (i === page) { %>
+            <span><%= i %></span>
+        <% } else { %>
+            <a href="/admin/posts?page=<%= i %>"><%= i %></a>
+        <% } %>
+    <% } %>
+
+    <% if (page < pageCount) { %>
+        <a href="/admin/posts?page=<%= page + 1 %>">Next</a>
+    <% } %>
+</div>
+
+<%- include('../partials/footer') %> 

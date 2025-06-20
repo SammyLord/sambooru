@@ -1,0 +1,173 @@
+/* General Body Styles */
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+    text-align: center; /* IE5 bug fix */
+}
+
+#container {
+    width: 960px;
+    margin: 0 auto;
+    text-align: left;
+}
+
+#content {
+    padding: 1em;
+}
+
+/* Clearfix for floated elements */
+.clearfix:after {
+    content: ".";
+    display: block;
+    height: 0;
+    clear: both;
+    visibility: hidden;
+}
+
+/* Navigation */
+nav {
+    background-color: #333;
+    color: white;
+    padding: 1em;
+    overflow: hidden; /* Contains floats */
+}
+
+.nav-links {
+    float: left;
+}
+
+.user-info {
+    float: right;
+}
+
+nav a {
+    color: white;
+    text-decoration: none;
+    padding: 0 1em;
+}
+
+/* Headings and Forms */
+h1, h2, h3 {
+    text-align: center;
+}
+
+form div {
+    margin-bottom: 1em;
+}
+
+/* Search Container */
+.search-container {
+    text-align: center;
+    margin: 2em 0;
+}
+
+.search-container input[type="text"] {
+    padding: 5px;
+    width: 300px;
+    border: 1px solid #ddd;
+}
+
+.search-container button {
+    padding: 5px 10px;
+}
+
+/* Post Page */
+.post-container {
+    overflow: hidden; /* Contains floats */
+    margin: 2em 0;
+}
+
+.image-container {
+    float: left;
+    width: 65%;
+}
+
+.image-container img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #ddd;
+}
+
+.details-container {
+    float: right;
+    width: 30%;
+}
+
+/* Tags */
+.tags-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.tags-list li {
+    display: inline;
+    padding: 5px 10px;
+    margin: 2px;
+    color: white;
+}
+
+.tag-general { background-color: #5bc0de; }
+.tag-character { background-color: #5cb85c; }
+.tag-artist { background-color: #f0ad4e; }
+.tag-copyright { background-color: #d9534f; }
+
+/* Search Results Grid */
+.search-results-grid {
+    margin: 2em 0;
+    overflow: hidden; /* Contains floats */
+}
+
+.thumbnail {
+    float: left;
+    width: 150px;
+    height: 150px;
+    border: 1px solid #ddd;
+    padding: 5px;
+    margin: 5px;
+    background-color: white;
+    text-align: center;
+}
+
+.thumbnail img {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* Comments Section */
+.comments-section {
+    margin-top: 2em;
+}
+
+.comments-section textarea {
+    width: 100%;
+    height: 80px;
+    padding: 5px;
+    border: 1px solid #ddd;
+}
+
+.comment {
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin-top: 10px;
+    background-color: #fff;
+}
+
+.comment-author {
+    font-weight: bold;
+    margin: 0;
+}
+
+.comment-content {
+    margin: 5px 0;
+}
+
+.comment-date {
+    font-size: 0.8em;
+    color: #777;
+    text-align: right;
+    margin: 0;
+} 

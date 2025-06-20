@@ -1,0 +1,29 @@
+{
+  "name": "sambooru",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/app.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "better-sqlite3": "^11.1.2",
+    "body-parser": "^1.20.2",
+    "cookie-parser": "^1.4.6",
+    "csurf": "^1.11.0",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "multer": "^1.4.5-lts.1",
+    "ollama": "^0.5.2",
+    "quick.db": "^9.1.7",
+    "sharp": "^0.33.4",
+    "shorthash": "^0.0.2"
+  }
+} 
