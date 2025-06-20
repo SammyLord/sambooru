@@ -10,6 +10,12 @@ const { Ollama } = require('ollama');
 const ffmpeg = require('fluent-ffmpeg');
 
 const ollama = new Ollama({ host: process.env.OLLAMA_HOST || 'http://localhost:11434' });
+const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
+const thumbnailsDir = path.join(__dirname, '..', 'public', 'thumbnails');
+
+// Ensure directories exist
+fs.mkdir(uploadsDir, { recursive: true }).catch(console.error);
+fs.mkdir(thumbnailsDir, { recursive: true }).catch(console.error);
 
 // Configure multer to accept images and videos
 const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'];
@@ -232,10 +238,10 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                 const response = await ollama.generate({ model: 'moondream', prompt: prompt, images: [imageBase64], stream: false });
                 rawAutoTags = response.response;
             } else if (file.mimetype.startsWith('video/')) {
-                const framePath = path.join(__dirname, '..', '..', 'uploads', `${hash}_frame.png`);
+                const framePath = path.join(uploadsDir, `${hash}_frame.png`);
                 await new Promise((resolve, reject) => {
                     ffmpeg(file.path)
-                        .screenshots({ count: 1, filename: `${hash}_frame.png`, folder: 'uploads/' })
+                        .screenshots({ count: 1, filename: `${hash}_frame.png`, folder: uploadsDir })
                         .on('end', resolve).on('error', reject);
                 });
                 const frameBase64 = (await fs.readFile(framePath)).toString('base64');
@@ -273,7 +279,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             tags: []
         };
         
-        const thumbPath = path.join(__dirname, '..', 'public', 'thumbnails', hash + '.jpg');
+        const thumbPath = path.join(thumbnailsDir, hash + '.jpg');
 
         // Process media files
         if (file.mimetype === 'image/gif') {
@@ -289,14 +295,13 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             await sharp(file.path).png({ quality: 80, compressionLevel: 7 }).toFile(imagePath);
             await sharp(imagePath).resize(150, 150, { fit: 'inside' }).toFile(thumbPath);
         } else if (file.mimetype.startsWith('video/')) {
-            const tempPath = req.file.path;
-            const outputFilename = `${hash}.mov`;
-            const processedPath = path.join(uploadsDir, outputFilename);
-            const thumbPath = path.join(thumbnailsDir, `${hash}.png`);
-
-            console.log(`Transcoding video ${tempPath} to ${processedPath}`);
+            newPost.type = 'video';
+            newPost.file_ext = '.mov';
 
             try {
+                const tempPath = file.path;
+                const processedPath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
+                
                 // Transcode the video to Cinepak .mov
                 await new Promise((resolve, reject) => {
                     ffmpeg(tempPath)
@@ -316,34 +321,19 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                     ffmpeg(processedPath)
                         .screenshots({
                             count: 1,
-                            timemarks: ['1'], // seek to 1 second
-                            filename: `${hash}.png`,
-                            folder: thumbnailsDir,
-                            size: '150x150'
+                            filename: `${hash}.jpg`,
+                            folder: thumbnailsDir
                         })
                         .on('end', resolve)
-                        .on('error', (err) => {
-                            console.error('Error creating video thumbnail:', err.message);
-                            reject(err);
-                        });
+                        .on('error', reject);
                 });
-                 console.log('Video thumbnail created.');
-
-                fileToSave = outputFilename;
-                postType = 'video';
-                
-                const dimensions = await getVideoDimensions(processedPath);
-                width = dimensions.width;
-                height = dimensions.height;
-                
-                const thumbDimensions = await getImageDimensions(thumbPath);
-                thumbWidth = thumbDimensions.width;
-                thumbHeight = thumbDimensions.height;
+                console.log('Video thumbnail created.');
 
             } catch (error) {
                 console.error("Video processing failed:", error);
-                // Attempt to clean up the failed processed file
-                await fs.unlink(processedPath).catch(e => console.error("Failed to delete processed file on error:", e));
+                // Attempt to clean up the failed processed file if it exists
+                const processedPath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
+                await fs.unlink(processedPath).catch(e => console.error("Failed to delete processed file on error:", e.message));
                 return res.status(500).send('Server error during video processing.');
             }
         }
