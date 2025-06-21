@@ -9,7 +9,7 @@ This project was developed as a friendly alternative to Rust-based boorus, such 
 *   **Post Management**: Upload images and videos, edit their tags, and delete them.
 *   **Image & Video Processing**:
     *   **Image Compression**: Converts all uploaded images to optimized PNG files to save space.
-    *   **Video Transcoding**: Automatically transcodes uploaded videos to a highly-compatible MPEG-1 format, friendly for legacy systems like QuickTime on Mac OS 9 and early Windows Media Player.
+    *   **Video Transcoding**: Automatically transcodes uploaded videos to H.264
 *   **Tagging System**: Assign multiple tags to each post, with support for tag categories (e.g., `general`, `character`, `artist`).
 *   **Duplicate Detection**: Uses SHA256 hashing to prevent duplicate file uploads.
 *   **User Accounts & Moderation**:
