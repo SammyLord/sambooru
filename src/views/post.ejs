@@ -12,8 +12,8 @@
     <div class="post-container">
         <div class="image-container">
             <% if (post.type === 'video') { %>
-                <video width="15%" controls muted loop>
-                    <source width="15%" src="/images/<%= post.hash %><%= post.file_ext %>" type="video/<%= post.file_ext.substring(1) %>">
+                <video width="60%" controls muted loop>
+                    <source width="60%" src="/images/<%= post.hash %><%= post.file_ext %>" type="video/<%= post.file_ext.substring(1) %>">
                 </video>
             <% } else { %>
                 <img src="/images/<%= post.hash %><%= post.file_ext %>" alt="Post <%= postId %>">
