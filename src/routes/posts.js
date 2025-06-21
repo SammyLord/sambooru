@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const crypto = require('crypto');
-const fs = require('fs/promises');
+const fsp = require('fs/promises');
+const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const { db, posts, tags: tagsDb, users, comments, favorites } = require('../db/database');
@@ -14,8 +15,8 @@ const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
 const thumbnailsDir = path.join(__dirname, '..', 'public', 'thumbnails');
 
 // Ensure directories exist
-fs.mkdir(uploadsDir, { recursive: true }).catch(console.error);
-fs.mkdir(thumbnailsDir, { recursive: true }).catch(console.error);
+fsp.mkdir(uploadsDir, { recursive: true }).catch(console.error);
+fsp.mkdir(thumbnailsDir, { recursive: true }).catch(console.error);
 
 // Configure multer to accept images and videos
 const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'];
@@ -204,29 +205,74 @@ async function getOrCreateTag(name, category) {
     return tagId.toString();
 }
 
-router.post('/upload', upload.single('file'), async (req, res) => {
-    req.setTimeout(0); // Disable timeout for this route
+async function withTimeout(promise, ms) {
+    const timeout = new Promise((_, reject) => {
+        const id = setTimeout(() => {
+            clearTimeout(id);
+            reject(new Error(`Timed out in ${ms}ms.`));
+        }, ms);
+    });
 
-    if (!req.session.userId) {
-        return res.status(401).send('You must be logged in to upload.');
-    }
+    return Promise.race([
+        promise,
+        timeout
+    ]);
+}
 
-    try {
+router.post('/upload', upload.single('file'), (req, res) => {
+    // Don't use async/await here, we are managing the response stream manually
+    
+    // Set headers for a streaming response
+    res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Transfer-Encoding': 'chunked'
+    });
+
+    res.write('<html><body><p>Upload received. Processing, please wait...</p>');
+
+    const heartbeat = setInterval(() => {
+        res.write(' '); // Send a space to keep the connection alive
+    }, 2000);
+
+    const finish = (message) => {
+        clearInterval(heartbeat);
+        res.end(`<script>window.location.href = "${message}";</script></body></html>`);
+    };
+
+    const fail = (err) => {
+        clearInterval(heartbeat);
+        console.error("Upload failed:", err);
+        res.end(`<p>Error: ${err.message}. Please try again.</p></body></html>`);
+        if (req.file) {
+            fsp.unlink(req.file.path).catch(e => console.error("Failed to cleanup temp file on fail:", e));
+        }
+    };
+
+    (async () => {
+        if (!req.session.userId) {
+            throw new Error('You must be logged in to upload.');
+        }
+
         const { tags, category } = req.body;
         const file = req.file;
 
         if (!file || !tags) {
-            if (file) await fs.unlink(file.path);
-            return res.status(400).send('File and tags are required.');
+            if (file) await fsp.unlink(file.path);
+            throw new Error('File and tags are required.');
         }
 
-        const fileBuffer = await fs.readFile(file.path);
-        const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+        const hash = await new Promise((resolve, reject) => {
+            const hash = crypto.createHash('sha256');
+            const stream = fs.createReadStream(file.path);
+            stream.on('data', (data) => hash.update(data));
+            stream.on('end', () => resolve(hash.digest('hex')));
+            stream.on('error', reject);
+        });
 
         const allPosts = await posts.all();
         if (allPosts.some(p => p.value.hash === hash)) {
-            await fs.unlink(file.path);
-            return res.status(409).send('This file has already been uploaded.');
+            await fsp.unlink(file.path);
+            throw new Error('This file has already been uploaded.');
         }
 
         let autoTags = [];
@@ -235,10 +281,14 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             const prompt = 'List keywords for this image, separated by spaces. Example: "1girl cat_ears blue_hair smile"';
             let rawAutoTags = '';
             
+            const ollamaGenerate = async (b64) => {
+                const response = await ollama.generate({ model: 'moondream', prompt: prompt, images: [b64], stream: false });
+                return response.response;
+            };
+
             if (file.mimetype.startsWith('image/')) {
-                const imageBase64 = (await fs.readFile(file.path)).toString('base64');
-                const response = await ollama.generate({ model: 'moondream', prompt: prompt, images: [imageBase64], stream: false });
-                rawAutoTags = response.response;
+                const imageBase64 = (await fsp.readFile(file.path)).toString('base64');
+                rawAutoTags = await withTimeout(ollamaGenerate(imageBase64), 120000); // 2 minute timeout
             } else if (file.mimetype.startsWith('video/')) {
                 const framePath = path.join(uploadsDir, `${hash}_frame.png`);
                 await new Promise((resolve, reject) => {
@@ -246,33 +296,28 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                         .screenshots({ count: 1, filename: `${hash}_frame.png`, folder: uploadsDir })
                         .on('end', resolve).on('error', reject);
                 });
-                const frameBase64 = (await fs.readFile(framePath)).toString('base64');
-                const response = await ollama.generate({ model: 'moondream', prompt: prompt, images: [frameBase64], stream: false });
-                rawAutoTags = response.response;
-                await fs.unlink(framePath);
+                const frameBase64 = (await fsp.readFile(framePath)).toString('base64');
+                rawAutoTags = await withTimeout(ollamaGenerate(frameBase64), 120000); // 2 minute timeout
+                await fsp.unlink(framePath);
             }
 
             if (rawAutoTags) {
                 autoTags = rawAutoTags
                     .trim()
                     .toLowerCase()
-                    .replace(/["']/g, '')           // Remove quotation marks
-                    .replace(/[,;()]/g, ' ')        // Replace common separators with spaces
-                    .replace(/-/g, '_')             // Replace hyphens with underscores
-                    .replace(/[^a-z0-9_ ]/g, '')    // Remove all other invalid characters
+                    .replace(/["']/g, '')
+                    .replace(/[,;()]/g, ' ')
+                    .replace(/-/g, '_')
+                    .replace(/[^a-z0-9_ ]/g, '')
                     .split(/\s+/)
                     .filter(Boolean);
             }
         } catch (e) {
-            console.error("Ollama auto-tagging failed:", e.message);
+            console.error("Ollama auto-tagging failed (could be a timeout):", e.message);
         }
         
-        console.log("User tags:", tags);
-        console.log("Auto tags:", autoTags);
-
         const userTags = tags.trim().toLowerCase().split(/\s+/).filter(Boolean);
         const combinedTags = [...new Set([...userTags, ...autoTags])];
-        console.log("Combined tags:", combinedTags);
 
         let newPost = {
             hash,
@@ -283,12 +328,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         
         const thumbPath = path.join(thumbnailsDir, hash + '.jpg');
 
-        // Process media files
         if (file.mimetype === 'image/gif') {
             newPost.type = 'image';
             newPost.file_ext = '.gif';
             const imagePath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
-            await fs.rename(file.path, imagePath); // Move the file
+            await fsp.rename(file.path, imagePath);
             await sharp(imagePath).resize(150, 150, { fit: 'inside' }).toFile(thumbPath);
         } else if (file.mimetype.startsWith('image/')) {
             newPost.type = 'image';
@@ -298,46 +342,38 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             await sharp(imagePath).resize(150, 150, { fit: 'inside' }).toFile(thumbPath);
         } else if (file.mimetype.startsWith('video/')) {
             newPost.type = 'video';
-            newPost.file_ext = '.mov';
+            newPost.file_ext = '.mp4';
 
-            try {
-                const tempPath = file.path;
-                const processedPath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
-                
-                // Transcode the video to Cinepak .mov
-                await new Promise((resolve, reject) => {
-                    ffmpeg(tempPath)
-                        .outputOptions(['-c:v', 'cinepak', '-c:a', 'adpcm_ima_qt', '-q:v', '5'])
-                        .toFormat('mov')
-                        .on('end', resolve)
-                        .on('error', (err) => {
-                            console.error('Error during transcoding:', err.message);
-                            reject(err);
-                        })
-                        .save(processedPath);
-                });
-                console.log('Video transcoding finished.');
+            const tempPath = file.path;
+            const processedPath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
+            
+            await new Promise((resolve, reject) => {
+                ffmpeg(tempPath)
+                    .outputOptions([
+                        '-c:v', 'mpeg4',
+                        '-q:v', '4',
+                        '-c:a', 'aac',
+                        '-movflags', '+faststart'
+                    ])
+                    .toFormat('mp4')
+                    .on('end', resolve)
+                    .on('error', (err) => {
+                        console.error('Error during transcoding:', err.message);
+                        reject(err);
+                    })
+                    .save(processedPath);
+            });
 
-                // Create a thumbnail from the transcoded video
-                await new Promise((resolve, reject) => {
-                    ffmpeg(processedPath)
-                        .screenshots({
-                            count: 1,
-                            filename: `${hash}.jpg`,
-                            folder: thumbnailsDir
-                        })
-                        .on('end', resolve)
-                        .on('error', reject);
-                });
-                console.log('Video thumbnail created.');
-
-            } catch (error) {
-                console.error("Video processing failed:", error);
-                // Attempt to clean up the failed processed file if it exists
-                const processedPath = path.join(__dirname, '..', 'public', 'images', hash + newPost.file_ext);
-                await fs.unlink(processedPath).catch(e => console.error("Failed to delete processed file on error:", e.message));
-                return res.status(500).send('Server error during video processing.');
-            }
+            await new Promise((resolve, reject) => {
+                ffmpeg(processedPath)
+                    .screenshots({
+                        count: 1,
+                        filename: `${hash}.jpg`,
+                        folder: thumbnailsDir
+                    })
+                    .on('end', resolve)
+                    .on('error', reject);
+            });
         }
         
         const postId = await db.add('post_counter', 1);
@@ -350,26 +386,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
         await posts.set(postId.toString(), newPost);
         
-        // On success, clean up the original temporary file
-        await fs.unlink(req.file.path).catch(e => console.error("Failed to delete original upload:", e));
+        if (req.file) await fsp.unlink(req.file.path).catch(e => console.error("Failed to delete temp upload:", e));
 
-        res.redirect(`/posts/${postId}`);
+        finish(`/posts/${postId}`);
 
-    } catch (error) {
-        console.error("Upload failed:", error);
-        if (req.file) {
-            // Only try to unlink the file if it still exists at the temp path
-            try {
-                await fs.access(req.file.path);
-                await fs.unlink(req.file.path);
-            } catch (cleanupError) {
-                // This error can be ignored if the file is already gone,
-                // but we'll log it just in case something else went wrong.
-                console.error("Failed to cleanup file during error handling:", cleanupError.message);
-            }
-        }
-        res.status(500).send('Server error during upload: ' + error.message);
-    }
+    })().catch(fail);
 });
 
 router.get('/:id', async (req, res) => {
@@ -446,8 +467,8 @@ router.delete('/:id', async (req, res) => {
         // Delete files
         const imagePath = path.join(__dirname, '..', 'public', 'images', post.hash + post.file_ext);
         const thumbPath = path.join(__dirname, '..', 'public', 'thumbnails', post.hash + '.jpg');
-        await fs.unlink(imagePath).catch(err => console.error(err));
-        await fs.unlink(thumbPath).catch(err => console.error(err));
+        await fsp.unlink(imagePath).catch(err => console.error(err));
+        await fsp.unlink(thumbPath).catch(err => console.error(err));
 
         // Delete post from DB
         await posts.delete(postId);
