@@ -62,8 +62,11 @@ app.get('/upload', (req, res) => {
     res.render('upload');
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
     console.log(`Sambooru listening at http://localhost:${port}`);
 });
+
+server.timeout = 600000; // 10 minutes
+server.headersTimeout = 600000; // 10 minutes
 
 module.exports = app; 
