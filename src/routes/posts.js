@@ -350,8 +350,8 @@ router.post('/upload', upload.single('file'), (req, res) => {
             await new Promise((resolve, reject) => {
                 ffmpeg(tempPath)
                     .outputOptions([
-                        '-c:v', 'mpeg4',
-                        '-q:v', '4',
+                        '-c:v', 'libx264',
+                        '-pix_fmt', 'yuv420p',
                         '-c:a', 'aac',
                         '-movflags', '+faststart'
                     ])
