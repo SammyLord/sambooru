@@ -117,9 +117,12 @@ router.post('/login', async (req, res) => {
             return res.status(400).send('Invalid credentials.');
         }
 
-        req.session.userId = userEntry.id;
-        req.session.username = user.username;
-        req.session.role = user.role;
+        req.session.user = {
+            id: userEntry.id,
+            username: user.username,
+            role: user.role
+        };
+        req.session.userId = userEntry.id; // Keep for compatibility for now
         
         res.redirect('/');
 

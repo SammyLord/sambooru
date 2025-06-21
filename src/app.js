@@ -35,7 +35,7 @@ app.use(session({
 
 // Pass user info to all views
 app.use((req, res, next) => {
-    res.locals.user = req.session.username ? { username: req.session.username, role: req.session.role } : null;
+    res.locals.user = req.session.user || null;
     res.locals.booruName = process.env.BOORU_NAME || 'Sambooru';
     next();
 });
