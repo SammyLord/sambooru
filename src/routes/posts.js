@@ -205,6 +205,8 @@ async function getOrCreateTag(name, category) {
 }
 
 router.post('/upload', upload.single('file'), async (req, res) => {
+    req.setTimeout(0); // Disable timeout for this route
+
     if (!req.session.userId) {
         return res.status(401).send('You must be logged in to upload.');
     }
