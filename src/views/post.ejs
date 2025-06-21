@@ -12,7 +12,10 @@
     <div class="post-container">
         <div class="image-container">
             <% if (post.type === 'video') { %>
-                <embed src="/images/<%= post.hash %><%= post.file_ext %>" width="640" height="480" autostart="false">
+                <video controls muted loop>
+                    <source src="/images/<%= post.hash %><%= post.file_ext %>" type="video/<%= post.file_ext.substring(1) %>">
+                    <embed src="/images/<%= post.hash %><%= post.file_ext %>" width="640" height="480" autostart="false">
+                </video>
             <% } else { %>
                 <img src="/images/<%= post.hash %><%= post.file_ext %>" alt="Post <%= postId %>">
             <% } %>
