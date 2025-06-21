@@ -9,6 +9,7 @@ const posts = db.table('posts');
 const tags = db.table('tags');
 const comments = db.table('comments');
 const favorites = db.table('favorites');
+const hashes = db.table('hashes');
 
 // We also need to manage counters for auto-incrementing IDs
 async function initializeCounters() {
@@ -39,5 +40,6 @@ module.exports = {
     posts,
     tags,
     comments,
-    favorites
+    favorites,
+    hashes
 }; 

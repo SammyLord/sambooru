@@ -6,7 +6,7 @@ const fsp = require('fs/promises');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
-const { db, posts, tags: tagsDb, users, comments, favorites } = require('../db/database');
+const { db, posts, tags: tagsDb, users, comments, favorites, hashes } = require('../db/database');
 const { Ollama } = require('ollama');
 const ffmpeg = require('fluent-ffmpeg');
 
@@ -269,8 +269,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
             stream.on('error', reject);
         });
 
-        const allPosts = await posts.all();
-        if (allPosts.some(p => p.value.hash === hash)) {
+        if (await hashes.has(hash)) {
             await fsp.unlink(file.path);
             throw new Error('This file has already been uploaded.');
         }
@@ -385,6 +384,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
         }
 
         await posts.set(postId.toString(), newPost);
+        await hashes.set(hash, postId.toString());
         
         if (req.file) await fsp.unlink(req.file.path).catch(e => console.error("Failed to delete temp upload:", e));
 
@@ -472,6 +472,7 @@ router.delete('/:id', async (req, res) => {
 
         // Delete post from DB
         await posts.delete(postId);
+        await hashes.delete(post.hash);
         
         res.redirect('/');
 
