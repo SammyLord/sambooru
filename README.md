@@ -22,7 +22,7 @@ This project was developed as a friendly alternative to Rust-based boorus, such 
 *   **AI-Powered Auto-Tagging**: Integrated with the Ollama `moondream` model to automatically suggest tags for both images and video frames.
 *   **Favorites**: Users can mark their favorite posts.
 *   **User Profiles**: View a user's profile to see all their uploads.
-*   **High Compatibility**: Works on modern and older browsers (IE5+) with no client-side JavaScript required.
+*   **High Compatibility**: Works on modern and older browsers (Firefox 42 or above or thereabouts) with no client-side JavaScript required.
 *   **Name your booru**: Name it. Name it anything you like. 
 
 ## Project Structure
