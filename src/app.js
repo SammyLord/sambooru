@@ -14,7 +14,7 @@ const favoriteRoutes = require('./routes/favorites');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // View engine setup
 app.set('views', path.join(__dirname, 'views'));

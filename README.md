@@ -83,7 +83,7 @@ This project was developed as a friendly alternative to Rust-based boorus, such 
     *   `BOORU_NAME`: The name of your booru, which will be displayed in page titles and headings (default is `Sambooru`).
     *   `SESSION_SECRET`: A long, random string used to secure user sessions. Generate one with `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`.
     *   `OLLAMA_HOST`: The URL of your running Ollama instance (default is `http://localhost:11434`).
-
+    *   `PORT`: Web Port (default is 3000) 
 ## Running the Application
 
 Once the setup is complete, you can start the server:
